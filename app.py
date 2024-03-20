@@ -3,7 +3,7 @@ from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
 from forms import UserAddForm, LoginForm, MessageForm, UpdateUserForm
-from models import db, connect_db, User, Message
+from models import db, connect_db, User, Message, Likes
 
 CURR_USER_KEY = "curr_user"
 
@@ -75,7 +75,7 @@ def signup():
             db.session.commit()
 
         except IntegrityError:
-            flash("Username already taken", 'danger')
+            flash("Username/email already taken", 'danger')
             return render_template('users/signup.html', form=form)
 
         do_login(user)
@@ -150,6 +150,7 @@ def users_show(user_id):
                 .order_by(Message.timestamp.desc())
                 .limit(100)
                 .all())
+      
     return render_template('users/show.html', user=user, messages=messages)
 
 
@@ -241,8 +242,16 @@ def profile():
 
         flash("Invalid credentials.", 'danger')
 
-    return render_template('users/edit.html', form=form)
+    return render_template('users/edit.html', form=form, user_id=g.user.id)
 
+@app.route('/users/<int:user_id>/likes')
+def user_likes(user_id):
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    user = User.query.get_or_404(user_id)
+    return render_template('users/likes.html', user=user)        
 
 @app.route('/users/delete', methods=["POST"])
 def delete_user():
@@ -276,7 +285,7 @@ def messages_add():
 
     form = MessageForm()
 
-    if form.validate_on_submit():
+    if form.is_submitted() and form.validate():
         msg = Message(text=form.text.data)
         g.user.messages.append(msg)
         db.session.commit()
@@ -308,6 +317,31 @@ def messages_destroy(message_id):
 
     return redirect(f"/users/{g.user.id}")
 
+##############################################################################
+# Liked Messages Routes
+
+@app.route('/users/add_like/<int:message_id>', methods=["POST"])
+def add_like(message_id):
+
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+    
+    curr_likes = [(l.msgref.id) for l in Likes.query.filter(Likes.user_id == g.user.id).all()]
+
+    if message_id in curr_likes:
+        liked_msg = Likes.query.filter(Likes.message_id == message_id).all()             
+        db.session.delete(liked_msg[0])
+        db.session.commit()
+
+    else:
+        new_like = Likes(user_id=g.user.id, message_id=message_id)
+        db.session.add(new_like)
+        db.session.commit()
+
+    return redirect("/")
+
+
 
 ##############################################################################
 # Homepage and error pages
@@ -328,7 +362,9 @@ def homepage():
                     .limit(100)
                     .all())
 
-        return render_template('home.html', messages=messages)
+        curr_likes = [(l.msgref.id) for l in Likes.query.filter(Likes.user_id == g.user.id).all()]
+
+        return render_template('home.html', messages=messages, likes=curr_likes)
 
     else:
         return render_template('home-anon.html')

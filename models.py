@@ -4,6 +4,7 @@ from datetime import datetime
 
 from flask_bcrypt import Bcrypt
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.schema import PrimaryKeyConstraint
 
 bcrypt = Bcrypt()
 db = SQLAlchemy()
@@ -47,6 +48,10 @@ class Likes(db.Model):
         db.ForeignKey('messages.id', ondelete='cascade'),
         unique=True
     )
+
+    msgref = db.relationship('Message')
+
+    __tableargs__ = PrimaryKeyConstraint('user_id', 'message_id')
 
 
 class User(db.Model):
@@ -94,7 +99,7 @@ class User(db.Model):
         nullable=False,
     )
 
-    messages = db.relationship('Message')
+    messages = db.relationship('Message', cascade='all, delete-orphan')
 
     followers = db.relationship(
         "User",
