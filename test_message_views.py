@@ -71,3 +71,60 @@ class MessageViewTestCase(TestCase):
 
             msg = Message.query.one()
             self.assertEqual(msg.text, "Hello")
+
+    def test_logged_in_messaging(self):
+        # Does login succeed on valid credentials?
+        u1 = User.authenticate(
+            username='testuser',
+            password='testuser') 
+                
+        d = {"username": u1.username,
+            "password": "testuser"}
+        resp = self.client.post("/login", data=d, follow_redirects=True)
+        html = resp.get_data(as_text=True)
+        
+        # Make sure login works
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(f"Hello, {u1.username}!", html) 
+
+        # When you’re logged in, can you add a message as yourself?               
+        test_message = "Test message 1"
+        d = {
+            "text": test_message
+            }
+        resp = self.client.post("/messages/new", data=d, follow_redirects=True)
+        html = resp.get_data(as_text=True)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(test_message, html)
+
+        # Can you get that message from the db?
+        msg = Message.query.first()
+        self.assertEqual(msg.text, test_message)
+
+        # Can you delete that message?
+        resp = self.client.post(f"messages/{msg.id}/delete", follow_redirects=True)
+        html = resp.get_data(as_text=True)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Message deleted!", html)
+
+    def test_logged_out_messaging(self):
+        # When you’re logged out, are you prohibited from adding messages?        
+        d = {
+            "text": "Test message",
+            "timestamp": None,
+            "user_id": 1
+            }
+        resp = self.client.post("/messages/new", data=d, follow_redirects=True)
+        html = resp.get_data(as_text=True)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Access unauthorized.", html)    
+        
+        # When you’re logged out, are you prohibited from deleting messages?
+        resp = self.client.post("/messages/1/delete", follow_redirects=True)        
+        html = resp.get_data(as_text=True)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Access unauthorized.", html)        

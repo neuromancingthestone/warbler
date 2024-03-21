@@ -315,6 +315,8 @@ def messages_destroy(message_id):
     db.session.delete(msg)
     db.session.commit()
 
+    flash("Message deleted!", "danger")
+
     return redirect(f"/users/{g.user.id}")
 
 ##############################################################################
@@ -356,12 +358,17 @@ def homepage():
     """
 
     if g.user:
-        messages = (Message
-                    .query
-                    .order_by(Message.timestamp.desc())
-                    .limit(100)
-                    .all())
 
+        # Grab the ids of the current users that we are following
+        # Then query to get the message objects of those followed users
+
+        curr_following = [(f.id) for f in g.user.following]
+        messages = [(m) for m in Message.query.filter(
+            Message.user_id.in_(curr_following))
+            .order_by(Message.timestamp.desc())
+            .limit(100)
+            .all()]
+   
         curr_likes = [(l.msgref.id) for l in Likes.query.filter(Likes.user_id == g.user.id).all()]
 
         return render_template('home.html', messages=messages, likes=curr_likes)
